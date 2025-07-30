@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Soundness Layer Web CLI</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0f172a;
+    color: #e0e7ff;
+    margin: 0; padding: 2rem;
+    display: flex; justify-content: center; min-height: 100vh;
+  }
+  .container {
+    max-width: 700px;
+    width: 100%;
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 2rem 2.5rem;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+  }
+  h1 {
+    font-weight: 700;
+    font-size: 1.8rem;
+    color: #3b82f6;
+    margin-bottom: 1rem;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  form {
+    margin-bottom: 2rem;
+  }
+  label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: #bfdbfe;
+    margin-top: 1rem;
+  }
+  input[type="text"],
+  input[type="password"],
+  textarea {
+    background: #334155;
+    border: none;
+    border-radius: 8px;
+    color: #e0e7ff;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: 'Inter', monospace;
+    resize: vertical;
+    width: 100%;
+    transition: background 0.3s ease;
+  }
+  input[type="text"]:focus,
+  input[type="password"]:focus,
+  textarea:focus {
+    outline: none;
+    background: #1e40af;
+    box-shadow: 0 0 6px #3b82f6;
+  }
+  button {
+    margin-top: 1rem;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.3s ease;
+  }
+  button:hover {
+    background: #2563eb;
+  }
+  .log-box {
+    background: #1e293b;
+    color: #93c5fd;
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre-wrap;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    position: relative;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 0 10px #2563ebaa;
+  }
+  .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    font-size: 1.4rem;
+    color: #93c5fd;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .close-btn:hover {
+    color: #3b82f6;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Soundness Layer Web CLI</h1>
+
+    <form id="generate-form" autocomplete="off">
+      <h2>Generate Key</h2>
+      <label for="gen_name">Key Name</label>
+      <input id="gen_name" name="name" type="text" placeholder="Key name" required />
+      <label for="gen_password">Password</label>
+      <input id="gen_password" name="password" type="password" placeholder="Password" required />
+      <button type="submit">Generate Key</button>
+      <div id="generate-log"></div>
+    </form>
+
+    <form id="import-form" autocomplete="off">
+      <h2>Import Key</h2>
+      <label for="imp_name">Key Name</label>
+      <input id="imp_name" name="name" type="text" placeholder="Key name" required />
+      <label for="imp_mnemonic">Mnemonic Phrase</label>
+      <textarea id="imp_mnemonic" name="mnemonic" placeholder="Paste mnemonic phrase here" rows="3" required></textarea>
+      <label for="imp_password">Password</label>
+      <input id="imp_password" name="password" type="password" placeholder="Password" required />
+      <button type="submit">Import Key</button>
+      <div id="import-log"></div>
+    </form>
+
+    <div>
+      <h2>List Keys</h2>
+      <button id="list-keys-btn">Show Keys</button>
+      <div id="list-keys-log"></div>
+    </div>
+
+    <form id="send-form" autocomplete="off">
+      <h2>Send Proof</h2>
+      <label for="send_command">Paste Full Send Command (except password):</label>
+      <textarea id="send_command" name="command" placeholder='soundness-cli send --proof-file="..." --game="8queens" --key-name="..." --proving-system="ligetron" --payload=\'...\''
+        rows="5" required></textarea>
+      <label for="send_password">Password</label>
+      <input id="send_password" name="password" type="password" placeholder="Password" required />
+      <button type="submit">Send Proof</button>
+      <div id="send-log"></div>
+    </form>
+  </div>
+
+<script>
+function createLogBox(container, text) {
+  container.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'log-box';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'close-btn';
+  closeBtn.innerHTML = '&times;';
+  closeBtn.onclick = () => { container.innerHTML = ''; };
+
+  const pre = document.createElement('pre');
+  pre.textContent = text;
+
+  box.appendChild(closeBtn);
+  box.appendChild(pre);
+  container.appendChild(box);
+}
+
+function handleFormSubmit(formId, url, logId) {
+  const form = document.getElementById(formId);
+  const logContainer = document.getElementById(logId);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    createLogBox(logContainer, 'Processing... Please wait.');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        createLogBox(logContainer, `Error: ${response.status} ${response.statusText}`);
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        createLogBox(logContainer, `Error: ${data.error}`);
+      } else {
+        createLogBox(logContainer, data.output || 'No output returned.');
+      }
+    } catch (err) {
+      createLogBox(logContainer, 'Request failed: ' + err.message);
+    }
+  });
+}
+
+handleFormSubmit('generate-form', '/generate-key', 'generate-log');
+handleFormSubmit('import-form', '/import-key', 'import-log');
+
+document.getElementById('list-keys-btn').addEventListener('click', async () => {
+  const logContainer = document.getElementById('list-keys-log');
+  createLogBox(logContainer, 'Fetching keys...');
+
+  try {
+    const response = await fetch('/list-keys');
+    if (!response.ok) {
+      createLogBox(logContainer, `Error: ${response.status} ${response.statusText}`);
+      return;
+    }
+    const data = await response.json();
+    createLogBox(logContainer, data.output || 'No keys found.');
+  } catch (err) {
+    createLogBox(logContainer, 'Request failed: ' + err.message);
+  }
+});
+
+handleFormSubmit('send-form', '/send-proof', 'send-log');
+</script>
+
+</body>
+</html>
